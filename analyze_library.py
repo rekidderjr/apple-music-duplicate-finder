@@ -273,23 +273,59 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
         # Create a new workbook
         wb = openpyxl.Workbook()
         
-        # Create metadata duplicates sheet
-        metadata_sheet = wb.active
-        metadata_sheet.title = "Metadata Duplicates"
+        # Create summary sheet as the first sheet
+        summary_sheet = wb.active
+        summary_sheet.title = "Summary"
+        
+        # Group metadata duplicates by file extension
+        extension_groups = {}
+        for row_data in metadata_csv_rows[1:]:  # Skip header row
+            file_extension = row_data[6]  # File Extension column
+            if file_extension not in extension_groups:
+                extension_groups[file_extension] = []
+            extension_groups[file_extension].append(row_data)
         
         # Add headers with formatting
         header_font = Font(bold=True)
         header_fill = PatternFill(start_color="DDDDDD", end_color="DDDDDD", fill_type="solid")
         
+        # Create a sheet for each file extension
+        for file_extension, rows in extension_groups.items():
+            # Clean up extension name for sheet title
+            sheet_name = file_extension.strip().lstrip('.').upper() if file_extension else "Unknown"
+            if not sheet_name:
+                sheet_name = "Unknown"
+            
+            # Ensure sheet name is valid and not too long
+            sheet_name = sheet_name[:31]  # Excel limits sheet names to 31 chars
+            
+            # Create sheet
+            ext_sheet = wb.create_sheet(title=sheet_name)
+            
+            # Add headers
+            for col_idx, header in enumerate(metadata_csv_rows[0], 1):
+                cell = ext_sheet.cell(row=1, column=col_idx, value=header)
+                cell.font = header_font
+                cell.fill = header_fill
+            
+            # Add data rows
+            for row_idx, row_data in enumerate(rows, 2):
+                for col_idx, cell_value in enumerate(row_data, 1):
+                    ext_sheet.cell(row=row_idx, column=col_idx, value=cell_value)
+        
+        # Create "All Metadata Duplicates" sheet
+        all_metadata_sheet = wb.create_sheet(title="All Metadata Duplicates")
+        
+        # Add headers
         for col_idx, header in enumerate(metadata_csv_rows[0], 1):
-            cell = metadata_sheet.cell(row=1, column=col_idx, value=header)
+            cell = all_metadata_sheet.cell(row=1, column=col_idx, value=header)
             cell.font = header_font
             cell.fill = header_fill
         
         # Add data rows
         for row_idx, row_data in enumerate(metadata_csv_rows[1:], 2):
             for col_idx, cell_value in enumerate(row_data, 1):
-                metadata_sheet.cell(row=row_idx, column=col_idx, value=cell_value)
+                all_metadata_sheet.cell(row=row_idx, column=col_idx, value=cell_value)
         
         # Create location duplicates sheet
         if location_csv_rows and len(location_csv_rows) > 1:  # If we have data beyond headers
@@ -306,10 +342,7 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
                 for col_idx, cell_value in enumerate(row_data, 1):
                     location_sheet.cell(row=row_idx, column=col_idx, value=cell_value)
         
-        # Create summary sheet
-        summary_sheet = wb.create_sheet(title="Summary", index=0)  # Make it the first sheet
-        
-        # Add summary information
+        # Add summary information to summary sheet
         summary_sheet.cell(row=1, column=1, value="Apple Music Library Duplicate Analysis")
         summary_sheet.cell(row=1, column=1).font = Font(bold=True, size=14)
         
@@ -322,11 +355,21 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
         summary_sheet.cell(row=6, column=1, value="Multiple Entries with Same Location:")
         summary_sheet.cell(row=6, column=2, value=len(location_duplicates))
         
+        # Add file extension breakdown
+        summary_sheet.cell(row=8, column=1, value="Breakdown by File Extension:")
+        row_num = 9
+        for ext, rows in sorted(extension_groups.items()):
+            ext_name = ext if ext else "Unknown"
+            summary_sheet.cell(row=row_num, column=1, value=ext_name)
+            summary_sheet.cell(row=row_num, column=2, value=len(rows))
+            row_num += 1
+        
         # Add instructions
-        summary_sheet.cell(row=8, column=1, value="Instructions:")
-        summary_sheet.cell(row=9, column=1, value="• Use the tabs at the bottom to navigate between different types of duplicates")
-        summary_sheet.cell(row=10, column=1, value="• 'Metadata Duplicates' shows tracks with identical metadata but different file paths")
-        summary_sheet.cell(row=11, column=1, value="• 'Location Duplicates' shows multiple entries pointing to the same file")
+        summary_sheet.cell(row=row_num + 1, column=1, value="Instructions:")
+        summary_sheet.cell(row=row_num + 2, column=1, value="• Use the tabs at the bottom to navigate between different file types")
+        summary_sheet.cell(row=row_num + 3, column=1, value="• Each tab contains duplicates for a specific file extension")
+        summary_sheet.cell(row=row_num + 4, column=1, value="• 'All Metadata Duplicates' shows all tracks with identical metadata but different file paths")
+        summary_sheet.cell(row=row_num + 5, column=1, value="• 'Location Duplicates' shows multiple entries pointing to the same file")
         
         # Adjust column widths for better readability
         for sheet in wb.worksheets:
