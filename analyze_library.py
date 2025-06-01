@@ -22,6 +22,8 @@ def parse_arguments():
                         help='Path to Library.xml file (default: data/Library.xml)')
     parser.add_argument('--output', '-o', default='output',
                         help='Directory for output reports (default: output)')
+    parser.add_argument('--allowlist', '-a', default='output/allowlist.json',
+                        help='Path to allowlist file (default: output/allowlist.json)')
     return parser.parse_args()
 
 def ensure_directory_exists(directory):
@@ -54,7 +56,26 @@ def extract_tracks(library):
     
     return library['Tracks']
 
-def find_duplicates_by_metadata(tracks):
+def load_allowlist(allowlist_path):
+    """Load the allowlist of duplicates to ignore."""
+    if os.path.exists(allowlist_path):
+        try:
+            with open(allowlist_path, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"Warning: Allowlist file {allowlist_path} is not valid JSON. Creating a new one.")
+            return {'metadata_duplicates': [], 'location_duplicates': []}
+    else:
+        print(f"Allowlist file not found at {allowlist_path}. Creating a new one.")
+        return {'metadata_duplicates': [], 'location_duplicates': []}
+
+def save_allowlist(allowlist, allowlist_path):
+    """Save the allowlist to a file."""
+    with open(allowlist_path, 'w') as f:
+        json.dump(allowlist, f, indent=2)
+    print(f"Allowlist saved to {allowlist_path}")
+
+def find_duplicates_by_metadata(tracks, allowlist=None):
     """Find tracks with identical metadata but different file paths."""
     # Group by a combination of metadata fields
     metadata_groups = defaultdict(list)
@@ -90,9 +111,20 @@ def find_duplicates_by_metadata(tracks):
     
     # Filter for groups with more than one track
     duplicates = {key: tracks for key, tracks in metadata_groups.items() if len(tracks) > 1}
+    
+    # Filter out allowed duplicates
+    if allowlist and 'metadata_duplicates' in allowlist:
+        filtered_duplicates = {}
+        for key, tracks in duplicates.items():
+            # Check if this group is in the allowlist
+            track_ids = sorted([track['Track ID'] for track in tracks])
+            if track_ids not in allowlist['metadata_duplicates']:
+                filtered_duplicates[key] = tracks
+        return filtered_duplicates
+    
     return duplicates
 
-def find_duplicates_by_location(tracks):
+def find_duplicates_by_location(tracks, allowlist=None):
     """Find multiple entries pointing to the same file."""
     location_groups = defaultdict(list)
     
@@ -112,6 +144,17 @@ def find_duplicates_by_location(tracks):
     
     # Filter for groups with more than one track
     duplicates = {loc: tracks for loc, tracks in location_groups.items() if len(tracks) > 1}
+    
+    # Filter out allowed duplicates
+    if allowlist and 'location_duplicates' in allowlist:
+        filtered_duplicates = {}
+        for location, tracks in duplicates.items():
+            # Check if this group is in the allowlist
+            track_ids = sorted([track['Track ID'] for track in tracks])
+            if track_ids not in allowlist['location_duplicates']:
+                filtered_duplicates[location] = tracks
+        return filtered_duplicates
+    
     return duplicates
 
 def generate_report(metadata_duplicates, location_duplicates, output_dir):
@@ -399,15 +442,18 @@ def main():
     # Ensure output directory exists
     ensure_directory_exists(args.output)
     
+    # Load allowlist
+    allowlist = load_allowlist(args.allowlist)
+    
     # Load and parse the library
     library = load_library(args.input)
     tracks = extract_tracks(library)
     
     print(f"Analyzing {len(tracks)} tracks...")
     
-    # Find duplicates
-    metadata_duplicates = find_duplicates_by_metadata(tracks)
-    location_duplicates = find_duplicates_by_location(tracks)
+    # Find duplicates, filtering out allowed duplicates
+    metadata_duplicates = find_duplicates_by_metadata(tracks, allowlist)
+    location_duplicates = find_duplicates_by_location(tracks, allowlist)
     
     # Generate reports
     metadata_file, location_file, summary_file = generate_report(

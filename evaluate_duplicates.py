@@ -39,64 +39,96 @@ def load_duplicates(duplicates_path):
         print("Please run analyze_library.py first to generate the duplicates file.")
         sys.exit(1)
 
-def evaluate_duplicates(root, duplicates):
+def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json', duplicate_type='metadata_duplicates'):
     """
-    Evaluate duplicate tracks to determine which one to keep.
+    Add a set of track IDs to the allowlist so they won't be flagged as duplicates in future runs.
     
-    Criteria for evaluation:
-    1. File existence (files that exist are preferred)
-    2. File size (larger files might indicate higher quality)
-    3. Bit rate (higher bit rate is better)
-    4. Sample rate (higher sample rate is better)
-    5. Play count (tracks played more often might be preferred)
-    6. Date added (newer entries might have updated metadata)
-    7. Rating (higher rated tracks might be preferred)
+    Args:
+        track_ids: List of track IDs to add to the allowlist
+        allowlist_path: Path to the allowlist JSON file
+        duplicate_type: Type of duplicate ('metadata_duplicates' or 'location_duplicates')
     """
-    tracks_dict = {}
+    # Load existing allowlist
+    if os.path.exists(allowlist_path):
+        try:
+            with open(allowlist_path, 'r') as f:
+                allowlist = json.load(f)
+        except json.JSONDecodeError:
+            allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
+    else:
+        allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
     
-    # First, build a dictionary of all tracks
-    for dict_elem in root.findall('.//dict'):
-        track_id_elem = None
-        for i, elem in enumerate(dict_elem):
-            if elem.tag == 'key' and elem.text == 'Track ID':
-                track_id_elem = dict_elem[i+1]
-                break
-        
-        if track_id_elem is not None:
-            track_id = track_id_elem.text
-            tracks_dict[track_id] = dict_elem
+    # Ensure the duplicate type exists in the allowlist
+    if duplicate_type not in allowlist:
+        allowlist[duplicate_type] = []
     
-    evaluated_duplicates = {}
+    # Sort track IDs to ensure consistent comparison
+    sorted_track_ids = sorted(track_ids)
     
-    # Check if we're dealing with the duplicate_groups structure
+    # Check if this set of track IDs is already in the allowlist
+    for existing_ids in allowlist[duplicate_type]:
+        if sorted(existing_ids) == sorted_track_ids:
+            print(f"These tracks are already in the allowlist.")
+            return
+    
+    # Add to allowlist
+    allowlist[duplicate_type].append(sorted_track_ids)
+    
+    # Save updated allowlist
+    with open(allowlist_path, 'w') as f:
+        json.dump(allowlist, f, indent=2)
+    
+    print(f"Added tracks {', '.join(track_ids)} to the allowlist.")
+    print(f"These tracks will be ignored in future duplicate detection runs.")
+
+def interactive_allowlist_manager(duplicates_path, allowlist_path='output/allowlist.json'):
+    """
+    Interactive command-line interface to manage the allowlist.
+    
+    Args:
+        duplicates_path: Path to the duplicates JSON file
+        allowlist_path: Path to the allowlist JSON file
+    """
+    # Load duplicates
+    duplicates = load_duplicates(duplicates_path)
+    
+    # Determine the structure of the duplicates file
     if "duplicate_groups" in duplicates:
         duplicate_groups = duplicates["duplicate_groups"]
+        duplicate_type = 'metadata_duplicates'
     else:
         duplicate_groups = duplicates
+        duplicate_type = 'location_duplicates'
     
-    for group_id, duplicate_group in enumerate(duplicate_groups):
-        evaluated_group = []
+    print("\nAllowlist Manager")
+    print("================")
+    print("This tool helps you mark duplicates as intentional so they won't be flagged in future runs.")
+    print(f"Found {len(duplicate_groups)} duplicate groups.")
+    
+    for i, group in enumerate(duplicate_groups):
+        print(f"\nGroup {i+1}:")
         
         # Handle the structure from metadata_duplicates JSON
-        if "tracks" in duplicate_group:
-            tracks_to_evaluate = duplicate_group["tracks"]
+        if "tracks" in group:
+            tracks = group["tracks"]
+            if "name" in group and "artist" in group:
+                print(f"  {group['name']} - {group['artist']}")
         else:
-            tracks_to_evaluate = duplicate_group
-            
-        for track in tracks_to_evaluate:
-            track_id = str(track['Track ID'])
-            track_dict = tracks_dict.get(track_id)
-            
-            if track_dict is None:
-                continue
-                
-            evaluation = {
-                'Track ID': track_id,
-                'Name': track.get('Name', 'Unknown'),
-                'Artist': track.get('Artist', 'Unknown'),
-                'Location': track.get('Location', ''),
-                'Criteria': {}
-            }
+            tracks = group
+        
+        for j, track in enumerate(tracks):
+            print(f"  {j+1}. {track.get('Name', 'Unknown')} - {track.get('Artist', 'Unknown')}")
+            print(f"     Location: {track.get('Location', 'Unknown')}")
+            print(f"     Track ID: {track.get('Track ID', 'Unknown')}")
+        
+        choice = input("\nAdd this group to allowlist? (y/n/q to quit): ").lower()
+        if choice == 'q':
+            break
+        elif choice == 'y':
+            track_ids = [track.get('Track ID') for track in tracks]
+            add_to_allowlist(track_ids, allowlist_path, duplicate_type)
+    
+    print("\nAllowlist management complete.")
             
             # Check if file exists
             location = track.get('Location', '')
@@ -303,8 +335,15 @@ def main():
     parser.add_argument('--duplicates', default='output/duplicates.json', help='Path to duplicates JSON file')
     parser.add_argument('--output', default='output/evaluation.json', help='Path to save evaluation results')
     parser.add_argument('--html', default='output/evaluation_report.html', help='Path to save HTML report')
+    parser.add_argument('--allowlist', action='store_true', help='Run in allowlist management mode')
+    parser.add_argument('--allowlist-path', default='output/allowlist.json', help='Path to allowlist JSON file')
     
     args = parser.parse_args()
+    
+    # Check if we're in allowlist management mode
+    if args.allowlist:
+        interactive_allowlist_manager(args.duplicates, args.allowlist_path)
+        return
     
     # Ensure output directory exists
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
@@ -328,6 +367,8 @@ def main():
     print("Evaluation complete!")
     print(f"JSON results saved to: {args.output}")
     print(f"HTML report saved to: {args.html}")
+    print("\nTo add duplicates to the allowlist (so they won't be flagged in future runs):")
+    print(f"python evaluate_duplicates.py --allowlist --duplicates {args.duplicates}")
 
 if __name__ == "__main__":
     main()
