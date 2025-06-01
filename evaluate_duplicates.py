@@ -68,10 +68,22 @@ def evaluate_duplicates(root, duplicates):
     
     evaluated_duplicates = {}
     
-    for group_id, duplicate_group in duplicates.items():
+    # Check if we're dealing with the duplicate_groups structure
+    if "duplicate_groups" in duplicates:
+        duplicate_groups = duplicates["duplicate_groups"]
+    else:
+        duplicate_groups = duplicates
+    
+    for group_id, duplicate_group in enumerate(duplicate_groups):
         evaluated_group = []
         
-        for track in duplicate_group:
+        # Handle the structure from metadata_duplicates JSON
+        if "tracks" in duplicate_group:
+            tracks_to_evaluate = duplicate_group["tracks"]
+        else:
+            tracks_to_evaluate = duplicate_group
+            
+        for track in tracks_to_evaluate:
             track_id = str(track['Track ID'])
             track_dict = tracks_dict.get(track_id)
             
