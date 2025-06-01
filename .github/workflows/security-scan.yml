@@ -1,0 +1,66 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Run weekly on Sundays
+
+jobs:
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install bandit safety
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r . -x ./.venv,./tests,./data,./output -f json -o bandit-results.json || true
+          echo "=== Bandit Security Scan Summary ==="
+          bandit -r . -x ./.venv,./tests,./data,./output -ll || true
+        continue-on-error: true
+
+      - name: Run Safety scan for dependencies
+        run: |
+          safety scan -r requirements.txt --json -o safety-results.json || true
+          echo "=== Safety Dependency Check Summary ==="
+          safety scan -r requirements.txt || true
+        continue-on-error: true
+
+      - name: Upload security scan results
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-scan-results
+          path: |
+            bandit-results.json
+            safety-results.json
+
+      - name: Check for critical vulnerabilities
+        run: |
+          echo "=== Checking for critical vulnerabilities ==="
+          if [ -f bandit-results.json ] && grep -q '"issue_severity": "HIGH"' bandit-results.json; then
+            echo "HIGH severity issues found (Bandit):"
+            grep -A 10 '"issue_severity": "HIGH"' bandit-results.json
+            # Don't fail the build for now, just report
+            # exit 1
+          fi
+          
+          if [ -f safety-results.json ] && grep -q '"severity": "critical"' safety-results.json; then
+            echo "CRITICAL severity issues found in dependencies (Safety):"
+            grep -A 15 '"severity": "critical"' safety-results.json
+            # Don't fail the build for now, just report
+            # exit 1
+          fi
