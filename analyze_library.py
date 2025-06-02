@@ -253,10 +253,20 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
         })
         group_id += 1
     
-    # Write reports to files
-    metadata_file = os.path.join(output_dir, f"metadata_duplicates_{timestamp}.json")
-    location_file = os.path.join(output_dir, f"location_duplicates_{timestamp}.json")
-    excel_file = os.path.join(output_dir, f"duplicates_{timestamp}.xlsx")
+    # Write reports to files - without timestamps
+    metadata_file = os.path.join(output_dir, "metadata_duplicates.json")
+    location_file = os.path.join(output_dir, "location_duplicates.json")
+    excel_file = os.path.join(output_dir, "duplicates.xlsx")
+    
+    # Create backup of previous files if they exist
+    for file_path in [metadata_file, location_file, excel_file]:
+        if os.path.exists(file_path):
+            backup_file = f"{file_path}.bak"
+            try:
+                os.replace(file_path, backup_file)
+                print(f"Created backup of previous file: {backup_file}")
+            except Exception as e:
+                print(f"Warning: Could not create backup of {file_path}: {e}")
     
     # Write JSON reports
     with open(metadata_file, 'w') as f:
@@ -403,7 +413,7 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
             writer.writerows(location_csv_rows)
     
     # Generate summary report
-    summary_file = os.path.join(output_dir, f"summary_{timestamp}.txt")
+    summary_file = os.path.join(output_dir, "summary.txt")
     with open(summary_file, 'w') as f:
         f.write("Apple Music Library Duplicate Analysis\n")
         f.write("====================================\n\n")
@@ -503,9 +513,8 @@ def main():
         metadata_duplicates, location_duplicates, args.output
     )
     
-    # Get the timestamp for the Excel file
-    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    excel_file = os.path.join(args.output, f"duplicates_{timestamp}.xlsx")
+    # Get the path for the Excel file
+    excel_file = os.path.join(args.output, "duplicates.xlsx")
     
     # Print summary
     print("\nAnalysis complete!")

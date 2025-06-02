@@ -575,7 +575,12 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
 
 def find_duplicate_json_files(output_dir='output'):
     """Find all metadata_duplicates JSON files in the output directory."""
-    import glob
+    # First check for the standard non-timestamped file
+    standard_file = f"{output_dir}/metadata_duplicates.json"
+    if os.path.exists(standard_file):
+        return [standard_file]
+    
+    # Fall back to timestamped files if standard file doesn't exist
     json_files = glob.glob(f"{output_dir}/metadata_duplicates_*.json")
     return sorted(json_files, reverse=True)  # Most recent first
 
@@ -637,6 +642,9 @@ def main():
     if args.select or not args.duplicates:
         args.duplicates = select_json_file_ui()
         print(f"Selected: {args.duplicates}")
+    # If no duplicates file is specified, use the default non-timestamped file
+    elif not args.duplicates:
+        args.duplicates = 'output/metadata_duplicates.json'
     
     # Check if we're in allowlist management mode
     if args.allowlist:
