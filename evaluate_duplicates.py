@@ -17,7 +17,7 @@ import argparse
 try:
     import defusedxml.ElementTree
     # Replace standard ElementTree with defusedxml for security
-    xml.etree.ElementTree = defusedxml.ElementTree
+    ET = defusedxml.ElementTree
     print("Using defusedxml for secure XML parsing")
 except ImportError:
     print("Warning: defusedxml not installed. XML parsing may be vulnerable to attacks.")
