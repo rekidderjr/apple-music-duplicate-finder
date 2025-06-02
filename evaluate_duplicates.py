@@ -573,17 +573,70 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
     # Run the curses application
     wrapper(main_curses)
 
+def find_duplicate_json_files(output_dir='output'):
+    """Find all metadata_duplicates JSON files in the output directory."""
+    import glob
+    json_files = glob.glob(f"{output_dir}/metadata_duplicates_*.json")
+    return sorted(json_files, reverse=True)  # Most recent first
+
+def select_json_file_ui():
+    """Interactive UI to select a JSON file from available options."""
+    json_files = find_duplicate_json_files()
+    
+    if not json_files:
+        print("No duplicate JSON files found in the output directory.")
+        print("Please run analyze_library.py first to generate duplicate reports.")
+        sys.exit(1)
+    
+    print("\nAvailable duplicate files:")
+    for i, file_path in enumerate(json_files):
+        # Extract timestamp from filename
+        import re
+        timestamp_match = re.search(r'(\d{8}_\d{6})', file_path)
+        timestamp = timestamp_match.group(1) if timestamp_match else "Unknown"
+        
+        # Try to get file creation time
+        try:
+            from datetime import datetime
+            import os
+            ctime = datetime.fromtimestamp(os.path.getctime(file_path))
+            time_str = ctime.strftime("%Y-%m-%d %H:%M:%S")
+        except:
+            time_str = "Unknown time"
+        
+        print(f"{i+1}. {os.path.basename(file_path)} (Created: {time_str})")
+    
+    while True:
+        try:
+            choice = input("\nSelect a file number (or press Enter for most recent): ")
+            if choice.strip() == "":
+                return json_files[0]  # Return the most recent file
+            
+            choice_idx = int(choice) - 1
+            if 0 <= choice_idx < len(json_files):
+                return json_files[choice_idx]
+            else:
+                print(f"Please enter a number between 1 and {len(json_files)}")
+        except ValueError:
+            print("Please enter a valid number")
+
 def main():
     parser = argparse.ArgumentParser(description='Evaluate duplicate tracks in Apple Music Library')
     parser.add_argument('--library', default='data/Library.xml', help='Path to Apple Music Library XML file')
-    parser.add_argument('--duplicates', default='output/duplicates.json', help='Path to duplicates JSON file')
+    parser.add_argument('--duplicates', help='Path to duplicates JSON file')
     parser.add_argument('--output', default='output/evaluation.json', help='Path to save evaluation results')
     parser.add_argument('--html', default='output/evaluation_report.html', help='Path to save HTML report')
     parser.add_argument('--allowlist', action='store_true', help='Run in allowlist management mode')
     parser.add_argument('--allowlist-path', default='output/allowlist.json', help='Path to allowlist JSON file')
     parser.add_argument('--arrow-ui', action='store_true', help='Use arrow-key based UI for allowlist management')
+    parser.add_argument('--select', action='store_true', help='Show UI to select duplicates JSON file')
     
     args = parser.parse_args()
+    
+    # If --select is specified or no duplicates file is provided, show the selection UI
+    if args.select or not args.duplicates:
+        args.duplicates = select_json_file_ui()
+        print(f"Selected: {args.duplicates}")
     
     # Check if we're in allowlist management mode
     if args.allowlist:
