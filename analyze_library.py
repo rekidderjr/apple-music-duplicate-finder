@@ -32,6 +32,25 @@ def ensure_directory_exists(directory):
         os.makedirs(directory)
         print(f"Created directory: {directory}")
 
+def load_allowlist(allowlist_path):
+    """Load the allowlist of duplicates to ignore."""
+    if os.path.exists(allowlist_path):
+        try:
+            with open(allowlist_path, 'r') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            print(f"Warning: Allowlist file {allowlist_path} is not valid JSON. Creating a new one.")
+            return {'metadata_duplicates': [], 'location_duplicates': []}
+    else:
+        print(f"Allowlist file not found at {allowlist_path}. Creating a new one.")
+        return {'metadata_duplicates': [], 'location_duplicates': []}
+
+def save_allowlist(allowlist, allowlist_path):
+    """Save the allowlist to a file."""
+    with open(allowlist_path, 'w') as f:
+        json.dump(allowlist, f, indent=2)
+    print(f"Allowlist saved to {allowlist_path}")
+
 def load_library(file_path):
     """Load and parse the Apple Music Library.XML file."""
     if not os.path.exists(file_path):
@@ -55,25 +74,6 @@ def extract_tracks(library):
         sys.exit(1)
     
     return library['Tracks']
-
-def load_allowlist(allowlist_path):
-    """Load the allowlist of duplicates to ignore."""
-    if os.path.exists(allowlist_path):
-        try:
-            with open(allowlist_path, 'r') as f:
-                return json.load(f)
-        except json.JSONDecodeError:
-            print(f"Warning: Allowlist file {allowlist_path} is not valid JSON. Creating a new one.")
-            return {'metadata_duplicates': [], 'location_duplicates': []}
-    else:
-        print(f"Allowlist file not found at {allowlist_path}. Creating a new one.")
-        return {'metadata_duplicates': [], 'location_duplicates': []}
-
-def save_allowlist(allowlist, allowlist_path):
-    """Save the allowlist to a file."""
-    with open(allowlist_path, 'w') as f:
-        json.dump(allowlist, f, indent=2)
-    print(f"Allowlist saved to {allowlist_path}")
 
 def find_duplicates_by_metadata(tracks, allowlist=None):
     """Find tracks with identical metadata but different file paths."""
@@ -171,7 +171,9 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
     
     # CSV data for metadata duplicates
     metadata_csv_rows = []
-    metadata_csv_rows.append(['Group ID', 'Track ID', 'Name', 'Artist', 'Album', 'Duration (ms)', 'File Extension', 'Play Count', 'Date Added', 'Location'])
+    metadata_csv_rows.append(['Group ID', 'Track ID', 'Name', 'Artist', 'Album', 
+                             'Duration (ms)', 'File Extension', 'Play Count', 
+                             'Date Added', 'Location'])
     
     group_id = 1
     for key, tracks in metadata_duplicates.items():
@@ -220,7 +222,8 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
     
     # CSV data for location duplicates
     location_csv_rows = []
-    location_csv_rows.append(['Group ID', 'Track ID', 'Name', 'Artist', 'Album', 'Play Count', 'Date Added', 'Location'])
+    location_csv_rows.append(['Group ID', 'Track ID', 'Name', 'Artist', 'Album', 
+                             'Play Count', 'Date Added', 'Location'])
     
     group_id = 1
     for location, tracks in location_duplicates.items():
@@ -376,10 +379,14 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
         
         # Add instructions
         summary_sheet.cell(row=row_num + 1, column=1, value="Instructions:")
-        summary_sheet.cell(row=row_num + 2, column=1, value="• Use the tabs at the bottom to navigate between different file types")
-        summary_sheet.cell(row=row_num + 3, column=1, value="• Each tab contains duplicates for a specific file extension")
-        summary_sheet.cell(row=row_num + 4, column=1, value="• 'All Metadata Duplicates' shows all tracks with identical metadata but different file paths")
-        summary_sheet.cell(row=row_num + 5, column=1, value="• 'Location Duplicates' shows multiple entries pointing to the same file")
+        summary_sheet.cell(row=row_num + 2, column=1, 
+                          value="• Use the tabs at the bottom to navigate between different file types")
+        summary_sheet.cell(row=row_num + 3, column=1, 
+                          value="• Each tab contains duplicates for a specific file extension")
+        summary_sheet.cell(row=row_num + 4, column=1, 
+                          value="• 'All Metadata Duplicates' shows all tracks with identical metadata")
+        summary_sheet.cell(row=row_num + 5, column=1, 
+                          value="• 'Location Duplicates' shows multiple entries pointing to the same file")
         
         # Adjust column widths for better readability
         for sheet in wb.worksheets:
@@ -390,7 +397,8 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
                     if cell.value:
                         max_length = max(max_length, len(str(cell.value)))
                 adjusted_width = max_length + 2
-                sheet.column_dimensions[column_letter].width = min(adjusted_width, 50)  # Cap at 50 for very long paths
+                # Cap at 50 for very long paths
+                sheet.column_dimensions[column_letter].width = min(adjusted_width, 50)
         
         # Save the workbook
         wb.save(excel_file)
@@ -421,7 +429,8 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
         
         f.write("Duplicate Tracks with Different Locations\n")
         f.write("---------------------------------------\n")
-        f.write(f"Found {len(metadata_duplicates)} groups of tracks with identical metadata but different locations.\n")
+        f.write(f"Found {len(metadata_duplicates)} groups of tracks with identical metadata ")
+        f.write("but different locations.\n")
         f.write(f"Detailed reports: \n")
         f.write(f"  - JSON: {os.path.basename(metadata_file)}\n")
         if excel_created:
@@ -432,59 +441,14 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
         
         f.write("Multiple Entries with Same Location\n")
         f.write("----------------------------------\n")
-        f.write(f"Found {len(location_duplicates)} instances of multiple entries pointing to the same file.\n")
+        f.write(f"Found {len(location_duplicates)} instances of multiple entries ")
+        f.write("pointing to the same file.\n")
         f.write(f"Detailed reports: \n")
         f.write(f"  - JSON: {os.path.basename(location_file)}\n")
         if excel_created:
             f.write(f"  - Excel: {os.path.basename(excel_file)} (Location Duplicates sheet)\n")
         else:
             f.write(f"  - CSV: {os.path.basename(location_csv_file)}\n")
-    
-    return metadata_file, location_file, summary_file
-    
-    for location, tracks in location_duplicates.items():
-        # Convert any datetime objects in tracks to strings
-        processed_tracks = []
-        for track in tracks:
-            processed_track = {}
-            for k, v in track.items():
-                if isinstance(v, datetime.datetime):
-                    processed_track[k] = v.strftime("%Y-%m-%d %H:%M:%S")
-                else:
-                    processed_track[k] = v
-            processed_tracks.append(processed_track)
-            
-        location_report['duplicate_groups'].append({
-            'location': location,
-            'tracks': processed_tracks
-        })
-    
-    # Write reports to files
-    metadata_file = os.path.join(output_dir, f"metadata_duplicates_{timestamp}.json")
-    location_file = os.path.join(output_dir, f"location_duplicates_{timestamp}.json")
-    
-    with open(metadata_file, 'w') as f:
-        json.dump(metadata_report, f, indent=2)
-    
-    with open(location_file, 'w') as f:
-        json.dump(location_report, f, indent=2)
-    
-    # Generate summary report
-    summary_file = os.path.join(output_dir, f"summary_{timestamp}.txt")
-    with open(summary_file, 'w') as f:
-        f.write("Apple Music Library Duplicate Analysis\n")
-        f.write("====================================\n\n")
-        f.write(f"Analysis performed at: {datetime.datetime.now().isoformat()}\n\n")
-        
-        f.write("Duplicate Tracks with Different Locations\n")
-        f.write("---------------------------------------\n")
-        f.write(f"Found {len(metadata_duplicates)} groups of tracks with identical metadata but different locations.\n")
-        f.write(f"Detailed report: {os.path.basename(metadata_file)}\n\n")
-        
-        f.write("Multiple Entries with Same Location\n")
-        f.write("----------------------------------\n")
-        f.write(f"Found {len(location_duplicates)} instances of multiple entries pointing to the same file.\n")
-        f.write(f"Detailed report: {os.path.basename(location_file)}\n")
     
     return metadata_file, location_file, summary_file
 

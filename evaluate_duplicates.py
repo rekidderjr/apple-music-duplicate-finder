@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-evaluate_duplicates.py - Evaluates duplicate tracks in Apple Music Library to determine which one to keep
+evaluate_duplicates.py - Evaluates duplicate tracks in Apple Music Library
 
 This script analyzes duplicate entries found by analyze_library.py and provides criteria
 for determining which duplicate is more valid or higher quality to keep.
@@ -183,7 +183,7 @@ def save_evaluation(evaluated_duplicates, output_path):
 
 def generate_html_report(evaluated_duplicates, output_path):
     """Generate an HTML report for the evaluated duplicates."""
-    html = """<!DOCTYPE html>
+    html_start = """<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -191,7 +191,8 @@ def generate_html_report(evaluated_duplicates, output_path):
     <title>Apple Music Duplicate Evaluation</title>
     <style>
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 
+            'Open Sans', 'Helvetica Neue', sans-serif;
             line-height: 1.6;
             color: #333;
             max-width: 1200px;
@@ -250,8 +251,11 @@ def generate_html_report(evaluated_duplicates, output_path):
 </head>
 <body>
     <h1>Apple Music Duplicate Evaluation</h1>
-    <p>Generated on: """ + datetime.now().strftime("%Y-%m-%d %H:%M:%S") + """</p>
-    <p>Total duplicate groups: """ + str(len(evaluated_duplicates)) + """</p>
+"""
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    html_content = f"""    <p>Generated on: {timestamp}</p>
+    <p>Total duplicate groups: {len(evaluated_duplicates)}</p>
     
     <div id="duplicate-groups">
 """
@@ -260,7 +264,7 @@ def generate_html_report(evaluated_duplicates, output_path):
         if not tracks:
             continue
             
-        html += f"""
+        html_content += f"""
         <div class="duplicate-group">
             <h2>Duplicate Group {group_id}</h2>
             <h3>{tracks[0]['Name']} - {tracks[0]['Artist']}</h3>
@@ -270,7 +274,7 @@ def generate_html_report(evaluated_duplicates, output_path):
             track_class = "track keep" if track.get('Recommendation') == 'KEEP' else "track remove"
             rec_class = "recommendation keep-rec" if track.get('Recommendation') == 'KEEP' else "recommendation remove-rec"
             
-            html += f"""
+            html_content += f"""
             <div class="{track_class}">
                 <div>
                     <strong>Track ID:</strong> {track['Track ID']}
@@ -283,30 +287,31 @@ def generate_html_report(evaluated_duplicates, output_path):
 """
             
             for key, value in track.get('Criteria', {}).items():
-                html += f"""
+                html_content += f"""
                     <div class="criteria-item"><strong>{key}:</strong> {value}</div>
 """
             
-            html += """
+            html_content += """
                 </div>
             </div>
 """
         
-        html += """
+        html_content += """
         </div>
 """
     
-    html += """
+    html_end = """
     </div>
 </body>
 </html>
 """
     
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write(html)
+        f.write(html_start + html_content + html_end)
     print(f"HTML report saved to {output_path}")
 
-def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json', duplicate_type='metadata_duplicates'):
+def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json', 
+                    duplicate_type='metadata_duplicates'):
     """
     Add a set of track IDs to the allowlist so they won't be flagged as duplicates in future runs.
     
@@ -412,10 +417,10 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
         print("Curses library not available. Falling back to text-based interface.")
         interactive_allowlist_manager(duplicates_path, allowlist_path)
         return
-    
+
     # Load duplicates
     duplicates = load_duplicates(duplicates_path)
-    
+
     # Determine the structure of the duplicates file
     if "duplicate_groups" in duplicates:
         duplicate_groups = duplicates["duplicate_groups"]
@@ -423,12 +428,12 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
     else:
         duplicate_groups = duplicates
         duplicate_type = 'location_duplicates'
-    
+
     def main_curses(stdscr):
         # Clear screen
         stdscr.clear()
         curses.curs_set(0)  # Hide cursor
-        
+
         # Enable color if available
         if curses.has_colors():
             curses.start_color()
@@ -443,17 +448,19 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
         current_pos = 0
         marked_groups = set()
         top_line = 0
-        
+
         # Main loop
         while True:
             stdscr.clear()
-            
+
             # Display header
             header = "Apple Music Duplicate Allowlist Manager"
             stdscr.addstr(0, 0, header, curses.color_pair(3) if curses.has_colors() else curses.A_BOLD)
             stdscr.addstr(1, 0, "=" * min(len(header), max_x-1))
-            stdscr.addstr(2, 0, f"Found {len(duplicate_groups)} duplicate groups. Use arrow keys to navigate, SPACE to mark/unmark, ENTER to save.")
-            
+            msg = f"Found {len(duplicate_groups)} duplicate groups. "
+            msg += "Use arrow keys to navigate, SPACE to mark/unmark, ENTER to save."
+            stdscr.addstr(2, 0, msg)
+
             # Display groups
             display_lines = max_y - 6  # Reserve lines for header and footer
             for i in range(top_line, min(top_line + display_lines, len(duplicate_groups))):
@@ -481,34 +488,36 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
                     attr = curses.color_pair(2) if curses.has_colors() else curses.A_BOLD
                 else:
                     attr = curses.A_NORMAL
-                
+
                 # Add marker for selected items
                 prefix = "[*] " if i in marked_groups else "[ ] "
-                
+
                 # Display the line
                 stdscr.addstr(y_pos, 0, prefix + display_str[:max_x-5], attr)
-                
+
                 # If this is the current position, show track details
                 if i == current_pos and y_pos + 1 < max_y - 1:
                     for j, track in enumerate(tracks[:2]):  # Show first 2 tracks
                         if y_pos + j + 1 < max_y - 1:
-                            track_info = f"    - {track.get('Name', 'Unknown')} ({track.get('Location', 'Unknown')})"
+                            track_info = f"    - {track.get('Name', 'Unknown')}"
+                            track_info += f" ({track.get('Location', 'Unknown')})"
                             stdscr.addstr(y_pos + j + 1, 0, track_info[:max_x-1])
-                    
+
                     if len(tracks) > 2 and y_pos + 3 < max_y - 1:
                         stdscr.addstr(y_pos + 3, 0, f"    ... and {len(tracks) - 2} more tracks")
-            
+
             # Display footer
             footer_y = max_y - 1
-            stdscr.addstr(footer_y, 0, "↑/↓: Navigate | SPACE: Mark/Unmark | ENTER: Save | q: Quit", 
+            footer = "↑/↓: Navigate | SPACE: Mark/Unmark | ENTER: Save | q: Quit"
+            stdscr.addstr(footer_y, 0, footer, 
                          curses.A_BOLD if curses.has_colors() else curses.A_NORMAL)
-            
+
             # Refresh the screen
             stdscr.refresh()
-            
+
             # Get user input
             key = stdscr.getch()
-            
+
             # Process input
             if key == curses.KEY_UP and current_pos > 0:
                 current_pos -= 1
@@ -527,7 +536,7 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
                 break
             elif key == ord('q'):
                 return  # Exit without saving
-        
+
         # Save marked groups to allowlist
         if marked_groups:
             # Load existing allowlist
@@ -539,38 +548,38 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
                     allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
             else:
                 allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
-            
+
             # Ensure the duplicate type exists in the allowlist
             if duplicate_type not in allowlist:
                 allowlist[duplicate_type] = []
-            
+
             # Add marked groups to allowlist
             for idx in marked_groups:
                 group = duplicate_groups[idx]
-                
+
                 # Handle the structure from metadata_duplicates JSON
                 if "tracks" in group:
                     tracks = group["tracks"]
                 else:
                     tracks = group
-                
+
                 # Get track IDs and add to allowlist
                 track_ids = sorted([track.get('Track ID') for track in tracks])
-                
+
                 # Check if already in allowlist
                 already_exists = False
                 for existing_ids in allowlist[duplicate_type]:
                     if sorted(existing_ids) == track_ids:
                         already_exists = True
                         break
-                
+
                 if not already_exists:
                     allowlist[duplicate_type].append(track_ids)
-            
+
             # Save updated allowlist
             with open(allowlist_path, 'w', encoding='utf-8') as f:
                 json.dump(allowlist, f, indent=2)
-            
+
             # Show confirmation message
             stdscr.clear()
             stdscr.addstr(0, 0, f"Added {len(marked_groups)} groups to the allowlist.", curses.A_BOLD)
@@ -588,7 +597,7 @@ def find_duplicate_json_files(output_dir='output'):
     standard_file = f"{output_dir}/metadata_duplicates.json"
     if os.path.exists(standard_file):
         return [standard_file]
-    
+
     # Fall back to timestamped files if standard file doesn't exist
     json_files = glob.glob(f"{output_dir}/metadata_duplicates_*.json")
     return sorted(json_files, reverse=True)  # Most recent first
@@ -596,34 +605,34 @@ def find_duplicate_json_files(output_dir='output'):
 def select_json_file_ui():
     """Interactive UI to select a JSON file from available options."""
     json_files = find_duplicate_json_files()
-    
+
     if not json_files:
         print("No duplicate JSON files found in the output directory.")
         print("Please run analyze_library.py first to generate duplicate reports.")
         sys.exit(1)
-    
+
     print("\nAvailable duplicate files:")
     for i, file_path in enumerate(json_files):
         # Extract timestamp from filename
         import re
         timestamp_match = re.search(r'(\d{8}_\d{6})', file_path)
         timestamp = timestamp_match.group(1) if timestamp_match else "Unknown"
-        
+
         # Try to get file creation time
         try:
             ctime = datetime.fromtimestamp(os.path.getctime(file_path))
             time_str = ctime.strftime("%Y-%m-%d %H:%M:%S")
         except Exception:
             time_str = "Unknown time"
-        
+
         print(f"{i+1}. {os.path.basename(file_path)} (Created: {time_str})")
-    
+
     while True:
         try:
             choice = input("\nSelect a file number (or press Enter for most recent): ")
             if choice.strip() == "":
                 return json_files[0]  # Return the most recent file
-            
+
             choice_idx = int(choice) - 1
             if 0 <= choice_idx < len(json_files):
                 return json_files[choice_idx]
@@ -634,17 +643,24 @@ def select_json_file_ui():
 
 def main():
     parser = argparse.ArgumentParser(description='Evaluate duplicate tracks in Apple Music Library')
-    parser.add_argument('--library', default='data/Library.xml', help='Path to Apple Music Library XML file')
+    parser.add_argument('--library', default='data/Library.xml', 
+                       help='Path to Apple Music Library XML file')
     parser.add_argument('--duplicates', help='Path to duplicates JSON file')
-    parser.add_argument('--output', default='output/evaluation.json', help='Path to save evaluation results')
-    parser.add_argument('--html', default='output/evaluation_report.html', help='Path to save HTML report')
-    parser.add_argument('--allowlist', action='store_true', help='Run in allowlist management mode')
-    parser.add_argument('--allowlist-path', default='output/allowlist.json', help='Path to allowlist JSON file')
-    parser.add_argument('--arrow-ui', action='store_true', help='Use arrow-key based UI for allowlist management')
-    parser.add_argument('--select', action='store_true', help='Show UI to select duplicates JSON file')
-    
+    parser.add_argument('--output', default='output/evaluation.json', 
+                       help='Path to save evaluation results')
+    parser.add_argument('--html', default='output/evaluation_report.html', 
+                       help='Path to save HTML report')
+    parser.add_argument('--allowlist', action='store_true', 
+                       help='Run in allowlist management mode')
+    parser.add_argument('--allowlist-path', default='output/allowlist.json', 
+                       help='Path to allowlist JSON file')
+    parser.add_argument('--arrow-ui', action='store_true', 
+                       help='Use arrow-key based UI for allowlist management')
+    parser.add_argument('--select', action='store_true', 
+                       help='Show UI to select duplicates JSON file')
+
     args = parser.parse_args()
-    
+
     # If --select is specified or no duplicates file is provided, show the selection UI
     if args.select or not args.duplicates:
         args.duplicates = select_json_file_ui()
@@ -652,7 +668,7 @@ def main():
     # If no duplicates file is specified, use the default non-timestamped file
     elif not args.duplicates:
         args.duplicates = 'output/metadata_duplicates.json'
-    
+
     # Check if we're in allowlist management mode
     if args.allowlist:
         if args.arrow_ui:
@@ -660,32 +676,32 @@ def main():
         else:
             interactive_allowlist_manager(args.duplicates, args.allowlist_path)
         return
-    
+
     # Ensure output directory exists
     os.makedirs(os.path.dirname(args.output), exist_ok=True)
     os.makedirs(os.path.dirname(args.html), exist_ok=True)
-    
+
     # Parse library XML
     root = parse_library_xml(args.library)
-    
+
     # Load duplicates
     duplicates = load_duplicates(args.duplicates)
-    
+
     # Evaluate duplicates
     evaluated_duplicates = evaluate_duplicates(root, duplicates)
-    
+
     # Save evaluation results
     save_evaluation(evaluated_duplicates, args.output)
-    
+
     # Generate HTML report
     generate_html_report(evaluated_duplicates, args.html)
-    
+
     print("Evaluation complete!")
     print(f"JSON results saved to: {args.output}")
     print(f"HTML report saved to: {args.html}")
     print("\nTo add duplicates to the allowlist (so they won't be flagged in future runs):")
     print(f"python evaluate_duplicates.py --allowlist --duplicates {args.duplicates}")
-    print(f"Or use the arrow-key based interface:")
+    print("Or use the arrow-key based interface:")
     print(f"python evaluate_duplicates.py --allowlist --arrow-ui --duplicates {args.duplicates}")
 
 if __name__ == "__main__":
