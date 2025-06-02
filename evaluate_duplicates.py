@@ -62,7 +62,7 @@ def evaluate_duplicates(root, duplicates):
     7. Rating (higher rated tracks might be preferred)
     """
     tracks_dict = {}
-    
+
     # First, build a dictionary of all tracks
     for dict_elem in root.findall('.//dict'):
         track_id_elem = None
@@ -70,35 +70,35 @@ def evaluate_duplicates(root, duplicates):
             if elem.tag == 'key' and elem.text == 'Track ID':
                 track_id_elem = dict_elem[i+1]
                 break
-        
+
         if track_id_elem is not None:
             track_id = track_id_elem.text
             tracks_dict[track_id] = dict_elem
-    
+
     evaluated_duplicates = {}
-    
+
     # Check if we're dealing with the duplicate_groups structure
     if "duplicate_groups" in duplicates:
         duplicate_groups = duplicates["duplicate_groups"]
     else:
         duplicate_groups = duplicates
-    
+
     for group_id, duplicate_group in enumerate(duplicate_groups):
         evaluated_group = []
-        
+
         # Handle the structure from metadata_duplicates JSON
         if "tracks" in duplicate_group:
             tracks_to_evaluate = duplicate_group["tracks"]
         else:
             tracks_to_evaluate = duplicate_group
-            
+
         for track in tracks_to_evaluate:
             track_id = str(track['Track ID'])
             track_dict = tracks_dict.get(track_id)
-            
+
             if track_dict is None:
                 continue
-                
+
             evaluation = {
                 'Track ID': track_id,
                 'Name': track.get('Name', 'Unknown'),
@@ -106,20 +106,20 @@ def evaluate_duplicates(root, duplicates):
                 'Location': track.get('Location', ''),
                 'Criteria': {}
             }
-            
+
             # Check if file exists
             location = track.get('Location', '')
             if location.startswith('file://'):
                 file_path = location[7:].replace('%20', ' ')
                 file_exists = os.path.exists(file_path)
                 evaluation['Criteria']['File Exists'] = file_exists
-            
+
             # Extract other criteria from track_dict
             for i, elem in enumerate(track_dict):
                 if elem.tag == 'key':
                     key = elem.text
                     value_elem = track_dict[i+1]
-                    
+
                     if key == 'Size':
                         evaluation['Criteria']['File Size'] = int(value_elem.text)
                     elif key == 'Bit Rate':
@@ -132,9 +132,9 @@ def evaluate_duplicates(root, duplicates):
                         evaluation['Criteria']['Rating'] = int(value_elem.text)
                     elif key == 'Date Added':
                         evaluation['Criteria']['Date Added'] = value_elem.text
-            
+
             evaluated_group.append(evaluation)
-        
+
         # Determine which track is recommended to keep
         if evaluated_group:
             # Sort by multiple criteria
@@ -145,34 +145,34 @@ def evaluate_duplicates(root, duplicates):
             # 5. Play Count (higher > lower)
             # 6. Rating (higher > lower)
             # 7. Date Added (newer > older)
-            
+
             for track in evaluated_group:
                 track['Score'] = 0
                 criteria = track['Criteria']
-                
+
                 # File exists is most important
                 if criteria.get('File Exists', False):
                     track['Score'] += 1000
-                
+
                 # Add other criteria scores
                 track['Score'] += criteria.get('Bit Rate', 0)
                 track['Score'] += criteria.get('Sample Rate', 0) / 100
                 track['Score'] += criteria.get('File Size', 0) / 1000000
                 track['Score'] += criteria.get('Play Count', 0) * 5
                 track['Score'] += criteria.get('Rating', 0) * 10
-            
+
             # Sort by score (descending)
             evaluated_group.sort(key=lambda x: x['Score'], reverse=True)
-            
+
             # Add recommendation
             for i, track in enumerate(evaluated_group):
                 if i == 0:
                     track['Recommendation'] = 'KEEP'
                 else:
                     track['Recommendation'] = 'REMOVE'
-        
+
         evaluated_duplicates[group_id] = evaluated_group
-    
+
     return evaluated_duplicates
 
 def save_evaluation(evaluated_duplicates, output_path):
@@ -263,17 +263,17 @@ def generate_html_report(evaluated_duplicates, output_path):
     for group_id, tracks in evaluated_duplicates.items():
         if not tracks:
             continue
-            
+
         html_content += f"""
         <div class="duplicate-group">
             <h2>Duplicate Group {group_id}</h2>
             <h3>{tracks[0]['Name']} - {tracks[0]['Artist']}</h3>
 """
-        
+
         for track in tracks:
             track_class = "track keep" if track.get('Recommendation') == 'KEEP' else "track remove"
             rec_class = "recommendation keep-rec" if track.get('Recommendation') == 'KEEP' else "recommendation remove-rec"
-            
+
             html_content += f"""
             <div class="{track_class}">
                 <div>
@@ -285,32 +285,32 @@ def generate_html_report(evaluated_duplicates, output_path):
                 
                 <div class="criteria">
 """
-            
+
             for key, value in track.get('Criteria', {}).items():
                 html_content += f"""
                     <div class="criteria-item"><strong>{key}:</strong> {value}</div>
 """
-            
+
             html_content += """
                 </div>
             </div>
 """
-        
+
         html_content += """
         </div>
 """
-    
+
     html_end = """
     </div>
 </body>
 </html>
 """
-    
+
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html_start + html_content + html_end)
     print(f"HTML report saved to {output_path}")
 
-def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json', 
+def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json',
                     duplicate_type='metadata_duplicates'):
     """
     Add a set of track IDs to the allowlist so they won't be flagged as duplicates in future runs.
@@ -329,27 +329,27 @@ def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json',
             allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
     else:
         allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
-    
+
     # Ensure the duplicate type exists in the allowlist
     if duplicate_type not in allowlist:
         allowlist[duplicate_type] = []
-    
+
     # Sort track IDs to ensure consistent comparison
     sorted_track_ids = sorted(track_ids)
-    
+
     # Check if this set of track IDs is already in the allowlist
     for existing_ids in allowlist[duplicate_type]:
         if sorted(existing_ids) == sorted_track_ids:
             print("These tracks are already in the allowlist.")
             return
-    
+
     # Add to allowlist
     allowlist[duplicate_type].append(sorted_track_ids)
-    
+
     # Save updated allowlist
     with open(allowlist_path, 'w', encoding='utf-8') as f:
         json.dump(allowlist, f, indent=2)
-    
+
     print(f"Added tracks {', '.join(track_ids)} to the allowlist.")
     print("These tracks will be ignored in future duplicate detection runs.")
 
@@ -363,7 +363,7 @@ def interactive_allowlist_manager(duplicates_path, allowlist_path='output/allowl
     """
     # Load duplicates
     duplicates = load_duplicates(duplicates_path)
-    
+
     # Determine the structure of the duplicates file
     if "duplicate_groups" in duplicates:
         duplicate_groups = duplicates["duplicate_groups"]
@@ -371,15 +371,15 @@ def interactive_allowlist_manager(duplicates_path, allowlist_path='output/allowl
     else:
         duplicate_groups = duplicates
         duplicate_type = 'location_duplicates'
-    
+
     print("\nAllowlist Manager")
     print("================")
     print("This tool helps you mark duplicates as intentional so they won't be flagged in future runs.")
     print(f"Found {len(duplicate_groups)} duplicate groups.")
-    
+
     for i, group in enumerate(duplicate_groups):
         print(f"\nGroup {i+1}:")
-        
+
         # Handle the structure from metadata_duplicates JSON
         if "tracks" in group:
             tracks = group["tracks"]
@@ -387,19 +387,19 @@ def interactive_allowlist_manager(duplicates_path, allowlist_path='output/allowl
                 print(f"  {group['name']} - {group['artist']}")
         else:
             tracks = group
-        
+
         for j, track in enumerate(tracks):
             print(f"  {j+1}. {track.get('Name', 'Unknown')} - {track.get('Artist', 'Unknown')}")
             print(f"     Location: {track.get('Location', 'Unknown')}")
             print(f"     Track ID: {track.get('Track ID', 'Unknown')}")
-        
+
         choice = input("\nAdd this group to allowlist? (y/n/q to quit): ").lower()
         if choice == 'q':
             break
         elif choice == 'y':
             track_ids = [track.get('Track ID') for track in tracks]
             add_to_allowlist(track_ids, allowlist_path, duplicate_type)
-    
+
     print("\nAllowlist management complete.")
 
 def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/allowlist.json'):
@@ -440,10 +440,10 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
             curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLUE)  # Selected item
             curses.init_pair(2, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Marked item
             curses.init_pair(3, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # Header
-        
+
         # Get screen dimensions
         max_y, max_x = stdscr.getmaxyx()
-        
+
         # Initialize variables
         current_pos = 0
         marked_groups = set()
@@ -466,7 +466,7 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
             for i in range(top_line, min(top_line + display_lines, len(duplicate_groups))):
                 group = duplicate_groups[i]
                 y_pos = i - top_line + 4  # Start after header
-                
+
                 # Handle the structure from metadata_duplicates JSON
                 if "tracks" in group:
                     tracks = group["tracks"]
@@ -477,10 +477,10 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
                 else:
                     tracks = group
                     group_name = f"Group {i+1}"
-                
+
                 # Format display string
                 display_str = f"{i+1}. {group_name} ({len(tracks)} tracks)"
-                
+
                 # Highlight current position or mark selected
                 if i == current_pos:
                     attr = curses.color_pair(1) if curses.has_colors() else curses.A_REVERSE
@@ -509,7 +509,7 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
             # Display footer
             footer_y = max_y - 1
             footer = "↑/↓: Navigate | SPACE: Mark/Unmark | ENTER: Save | q: Quit"
-            stdscr.addstr(footer_y, 0, footer, 
+            stdscr.addstr(footer_y, 0, footer,
                          curses.A_BOLD if curses.has_colors() else curses.A_NORMAL)
 
             # Refresh the screen
@@ -587,7 +587,7 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
             stdscr.addstr(3, 0, "Press any key to continue...")
             stdscr.refresh()
             stdscr.getch()
-    
+
     # Run the curses application
     wrapper(main_curses)
 
@@ -643,20 +643,20 @@ def select_json_file_ui():
 
 def main():
     parser = argparse.ArgumentParser(description='Evaluate duplicate tracks in Apple Music Library')
-    parser.add_argument('--library', default='data/Library.xml', 
+    parser.add_argument('--library', default='data/Library.xml',
                        help='Path to Apple Music Library XML file')
     parser.add_argument('--duplicates', help='Path to duplicates JSON file')
-    parser.add_argument('--output', default='output/evaluation.json', 
+    parser.add_argument('--output', default='output/evaluation.json',
                        help='Path to save evaluation results')
-    parser.add_argument('--html', default='output/evaluation_report.html', 
+    parser.add_argument('--html', default='output/evaluation_report.html',
                        help='Path to save HTML report')
-    parser.add_argument('--allowlist', action='store_true', 
+    parser.add_argument('--allowlist', action='store_true',
                        help='Run in allowlist management mode')
-    parser.add_argument('--allowlist-path', default='output/allowlist.json', 
+    parser.add_argument('--allowlist-path', default='output/allowlist.json',
                        help='Path to allowlist JSON file')
-    parser.add_argument('--arrow-ui', action='store_true', 
+    parser.add_argument('--arrow-ui', action='store_true',
                        help='Use arrow-key based UI for allowlist management')
-    parser.add_argument('--select', action='store_true', 
+    parser.add_argument('--select', action='store_true',
                        help='Show UI to select duplicates JSON file')
 
     args = parser.parse_args()

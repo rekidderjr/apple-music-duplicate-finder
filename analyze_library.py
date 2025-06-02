@@ -385,9 +385,9 @@ def generate_report(metadata_duplicates, location_duplicates, output_dir):
                           value="• Each tab contains duplicates for a specific file extension")
         summary_sheet.cell(row=row_num + 4, column=1, 
                           value="• 'All Metadata Duplicates' shows all tracks with identical metadata")
-        summary_sheet.cell(row=row_num + 5, column=1, 
+        summary_sheet.cell(row=row_num + 5, column=1,
                           value="• 'Location Duplicates' shows multiple entries pointing to the same file")
-        
+
         # Adjust column widths for better readability
         for sheet in wb.worksheets:
             for column in sheet.columns:
@@ -471,15 +471,15 @@ def main():
     # Find duplicates, filtering out allowed duplicates
     metadata_duplicates = find_duplicates_by_metadata(tracks, allowlist)
     location_duplicates = find_duplicates_by_location(tracks, allowlist)
-    
+
     # Generate reports
     metadata_file, location_file, summary_file = generate_report(
         metadata_duplicates, location_duplicates, args.output
     )
-    
+
     # Get the path for the Excel file
     excel_file = os.path.join(args.output, "duplicates.xlsx")
-    
+
     # Print summary
     print("\nAnalysis complete!")
     print(f"Found {len(metadata_duplicates)} groups of tracks with identical metadata but different locations.")
