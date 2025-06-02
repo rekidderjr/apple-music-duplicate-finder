@@ -9,10 +9,19 @@ for determining which duplicate is more valid or higher quality to keep.
 import os
 import sys
 import json
+import glob
 import xml.etree.ElementTree as ET
 from datetime import datetime
-from pathlib import Path
 import argparse
+
+try:
+    import defusedxml.ElementTree
+    # Replace standard ElementTree with defusedxml for security
+    xml.etree.ElementTree = defusedxml.ElementTree
+    print("Using defusedxml for secure XML parsing")
+except ImportError:
+    print("Warning: defusedxml not installed. XML parsing may be vulnerable to attacks.")
+    print("Install with: pip install defusedxml")
 
 def parse_library_xml(xml_path):
     """Parse the Apple Music Library XML file."""
@@ -32,7 +41,7 @@ def parse_library_xml(xml_path):
 def load_duplicates(duplicates_path):
     """Load the duplicates data from the JSON file."""
     try:
-        with open(duplicates_path, 'r') as f:
+        with open(duplicates_path, 'r', encoding='utf-8') as f:
             return json.load(f)
     except FileNotFoundError:
         print(f"Duplicates file not found at {duplicates_path}")
@@ -168,7 +177,7 @@ def evaluate_duplicates(root, duplicates):
 
 def save_evaluation(evaluated_duplicates, output_path):
     """Save the evaluation results to a JSON file."""
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         json.dump(evaluated_duplicates, f, indent=2)
     print(f"Evaluation saved to {output_path}")
 
@@ -293,7 +302,7 @@ def generate_html_report(evaluated_duplicates, output_path):
 </html>
 """
     
-    with open(output_path, 'w') as f:
+    with open(output_path, 'w', encoding='utf-8') as f:
         f.write(html)
     print(f"HTML report saved to {output_path}")
 
@@ -309,7 +318,7 @@ def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json', duplicat
     # Load existing allowlist
     if os.path.exists(allowlist_path):
         try:
-            with open(allowlist_path, 'r') as f:
+            with open(allowlist_path, 'r', encoding='utf-8') as f:
                 allowlist = json.load(f)
         except json.JSONDecodeError:
             allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
@@ -326,18 +335,18 @@ def add_to_allowlist(track_ids, allowlist_path='output/allowlist.json', duplicat
     # Check if this set of track IDs is already in the allowlist
     for existing_ids in allowlist[duplicate_type]:
         if sorted(existing_ids) == sorted_track_ids:
-            print(f"These tracks are already in the allowlist.")
+            print("These tracks are already in the allowlist.")
             return
     
     # Add to allowlist
     allowlist[duplicate_type].append(sorted_track_ids)
     
     # Save updated allowlist
-    with open(allowlist_path, 'w') as f:
+    with open(allowlist_path, 'w', encoding='utf-8') as f:
         json.dump(allowlist, f, indent=2)
     
     print(f"Added tracks {', '.join(track_ids)} to the allowlist.")
-    print(f"These tracks will be ignored in future duplicate detection runs.")
+    print("These tracks will be ignored in future duplicate detection runs.")
 
 def interactive_allowlist_manager(duplicates_path, allowlist_path='output/allowlist.json'):
     """
@@ -524,7 +533,7 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
             # Load existing allowlist
             if os.path.exists(allowlist_path):
                 try:
-                    with open(allowlist_path, 'r') as f:
+                    with open(allowlist_path, 'r', encoding='utf-8') as f:
                         allowlist = json.load(f)
                 except json.JSONDecodeError:
                     allowlist = {'metadata_duplicates': [], 'location_duplicates': []}
@@ -559,7 +568,7 @@ def interactive_arrow_allowlist_manager(duplicates_path, allowlist_path='output/
                     allowlist[duplicate_type].append(track_ids)
             
             # Save updated allowlist
-            with open(allowlist_path, 'w') as f:
+            with open(allowlist_path, 'w', encoding='utf-8') as f:
                 json.dump(allowlist, f, indent=2)
             
             # Show confirmation message
@@ -602,11 +611,9 @@ def select_json_file_ui():
         
         # Try to get file creation time
         try:
-            from datetime import datetime
-            import os
             ctime = datetime.fromtimestamp(os.path.getctime(file_path))
             time_str = ctime.strftime("%Y-%m-%d %H:%M:%S")
-        except:
+        except Exception:
             time_str = "Unknown time"
         
         print(f"{i+1}. {os.path.basename(file_path)} (Created: {time_str})")

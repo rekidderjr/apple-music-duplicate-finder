@@ -44,7 +44,7 @@ def select_json_file_ui():
         try:
             ctime = datetime.fromtimestamp(os.path.getctime(file_path))
             time_str = ctime.strftime("%Y-%m-%d %H:%M:%S")
-        except:
+        except Exception:
             time_str = "Unknown time"
         
         print(f"{i+1}. {os.path.basename(file_path)} (Created: {time_str})")
