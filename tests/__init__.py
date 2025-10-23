@@ -1,0 +1,1 @@
+"""Tests for apple-music-duplicate-finder."""
